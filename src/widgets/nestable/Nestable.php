@@ -48,9 +48,9 @@ class Nestable extends Widget
 
     /**
      * Url to MoveNodeAction
-     * @var string
+     * @var string|null|false
      */
-    public $moveUrl;
+    public $moveUrl = null;
 
     /**
      * Url to CreateNodeAction
@@ -81,6 +81,12 @@ class Nestable extends Widget
      * @var callable
      */
     public $formFieldsCallable;
+
+    /**
+     * Use multiple roots or a single root, null - autodetect
+     * @var null|boolean
+     */
+    public $multipleRoots = null;
 
     /**
      * Структура меню в php array формате
@@ -124,23 +130,31 @@ class Nestable extends Widget
         /** @var ActiveRecord[]|TreeInterface[] $rootNodes */
         $rootNodes = $model::find()->roots()->all();
 
-        if (!empty($rootNodes[0])) {
-            /** @var ActiveRecord|TreeInterface $items */
-            $items = $rootNodes[0]->populateTree();
-            $this->_items = $this->prepareItems($items);
+        if (count($rootNodes) > 1 || $this->multipleRoots === true) {
+            $this->_items = $this->prepareItems($rootNodes);
+        } else {
+            if (!empty($rootNodes[0])) {
+                /** @var ActiveRecord|TreeInterface $items */
+                $items = $rootNodes[0]->populateTree();
+                $this->_items = $this->prepareItems($items);
+            }
         }
     }
 
     /**
-     * @param ActiveRecord|TreeInterface $node
+     * @param ActiveRecord[]|TreeInterface[]|ActiveRecord|TreeInterface $node
      * @return array
      */
     protected function getNode($node)
     {
         $items = [];
-        /** @var ActiveRecord[]|TreeInterface[] $children */
-        $children = $node->children;
 
+        if (is_array($node))
+            $children = $node;
+        else
+            $children = $node->children;
+
+        /** @var ActiveRecord[]|TreeInterface[] $children */
         foreach ($children as $n => $node) {
             $items[$n]['id'] = $node->getPrimaryKey();
             $items[$n]['name'] = $node->getAttribute($this->nameAttribute);
@@ -274,13 +288,13 @@ class Nestable extends Widget
 
         $controller = Yii::$app->controller;
         if ($controller) {
-            $options['moveUrl'] = Url::to(["{$controller->id}/moveNode"]);
             $options['createUrl'] = Url::to(["{$controller->id}/createNode"]);
             $options['updateUrl'] = Url::to(["{$controller->id}/updateNode"]);
             $options['deleteUrl'] = Url::to(["{$controller->id}/deleteNode"]);
         }
 
-        if ($this->moveUrl) {
+        if ($this->moveUrl !== false) {
+            $options['moveUrl'] = Url::to(["{$controller->id}/moveNode"]);
             $this->pluginOptions['moveUrl'] = $this->moveUrl;
         }
         if ($this->createUrl) {
@@ -415,7 +429,8 @@ HTML;
 
         echo Html::beginTag('li', $htmlOptions);
 
-        echo Html::tag('div', '', ['class' => 'dd-handle']);
+        if ($this->moveUrl !== false)
+            echo Html::tag('div', '', ['class' => 'dd-handle']);
         echo Html::tag('div', $item['name'], ['class' => 'dd-content']);
 
         echo Html::beginTag('div', ['class' => 'dd-edit-panel']);
